@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Faigram – AI Assistant</title>
+<style>
+  :root {
+    --bg: #f5f6fb; --card: #ffffff; --text: #1d2033; --muted: #6b7088;
+    --accent: #5b5bf0; --user: #5b5bf0; --user-text: #ffffff; --bot: #eef0f8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12131c; --card: #1b1d2a; --text: #eceefa; --muted: #9aa0bb;
+      --accent: #8b8bff; --user: #6a6af5; --user-text: #ffffff; --bot: #262938;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    height: 100dvh; display: flex; justify-content: center;
+  }
+  .app {
+    width: 100%; max-width: 720px; height: 100%;
+    display: flex; flex-direction: column; background: var(--card);
+  }
+  header {
+    padding: 16px; display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--muted) 25%, transparent);
+  }
+  .logo {
+    width: 40px; height: 40px; border-radius: 12px; background: var(--accent);
+    color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 20px;
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  header p { font-size: 13px; margin: 2px 0 0; color: var(--muted); }
+  #chat { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .msg {
+    max-width: 85%; padding: 10px 14px; border-radius: 16px;
+    line-height: 1.45; white-space: pre-wrap; word-wrap: break-word;
+  }
+  .user { align-self: flex-end; background: var(--user); color: var(--user-text); border-bottom-right-radius: 4px; }
+  .bot { align-self: flex-start; background: var(--bot); border-bottom-left-radius: 4px; }
+  .typing { color: var(--muted); font-style: italic; }
+  form {
+    display: flex; gap: 8px; padding: 12px 16px 16px;
+    border-top: 1px solid color-mix(in srgb, var(--muted) 25%, transparent);
+  }
+  textarea {
+    flex: 1; resize: none; border-radius: 14px; padding: 12px 14px; font: inherit;
+    border: 1px solid color-mix(in srgb, var(--muted) 40%, transparent);
+    background: var(--bg); color: var(--text); max-height: 140px;
+  }
+  textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  button {
+    border: none; border-radius: 14px; padding: 0 18px; font: inherit; font-weight: 600;
+    background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">F</div>
+    <div>
+      <h1>Faigram</h1>
+      <p>Your personal AI assistant</p>
+    </div>
+  </header>
+
+  <div id="chat">
+    <div class="msg bot">Hi! I'm Faigram. Ask me anything.</div>
+  </div>
+
+  <form id="form">
+    <textarea id="input" rows="1" placeholder="Type a message…" required></textarea>
+    <button id="send" type="submit">Send</button>
+  </form>
+</div>
+
+<script>
+  const chat = document.getElementById("chat");
+  const form = document.getElementById("form");
+  const input = document.getElementById("input");
+  const send = document.getElementById("send");
+  const history = []; // conversation memory for this visitor
+
+  function addMessage(text, who) {
+    const div = document.createElement("div");
+    div.className = "msg " + who;
+    div.textContent = text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    return div;
+  }
+
+  // Enter sends, Shift+Enter makes a new line
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+
+    addMessage(text, "user");
+    history.push({ role: "user", content: text });
+    input.value = "";
+    send.disabled = true;
+    const typing = addMessage("Faigram is thinking…", "bot typing");
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Request failed");
+      typing.remove();
+      addMessage(data.reply, "bot");
+      history.push({ role: "assistant", content: data.reply });
+    } catch (err) {
+      typing.remove();
+      history.pop(); // drop the message that failed so the user can retry
+      addMessage("Sorry, something went wrong: " + err.message, "bot");
+    } finally {
+      send.disabled = false;
+      input.focus();
+    }
+  });
+</script>
+</body>
+</html>
